@@ -1,135 +1,106 @@
 const express = require('express');
-const Users = require('./userDb.js')
+const usersDB = require('./userDb.js')
+const postDB = require('../posts/postDb.js')
+
 const router = express.Router();
 
-//define custom middleware that will be used 
-const upperCase = (req, res, next) => {
-    let { name } = req.body;
-    capitalName = name.charAt(0).toUpperCase() + name.slice(1)
-  
-    if (name !== capitalName) {
-      return sendError( 'Please make sure your name starts with a Capital', res );
-    }
-    else{ 
-      next();
-    }
-  }
 
+router.post('/',validateUser, (req, res) => {
+    const newUser = req.body
+    usersDB.insert(newUser)
+    .then(result => {
+        res.status(201).json(result)
+    })
+    .catch(error => {
+        res.status(500).json({ error: "There was an error while saving the user to the database" })
+    })
+
+});
+
+router.post('/:id/posts',validatePost, validateUserId, (req, res) => {
+    const {id} = req.params
+    const newPost = req.body
+    //console.log('newPost', req.body)
+    usersDB.getById(id)
+    .then(user => {
+     postDB.insert(newPost)
+    .then(result => {
+        res.status(201).json(result)
+    })
+    .catch(error => {
+        res.status(500).json({ error: "There was an error while saving the user to the database" })
+    })
+    })
+    
+
+});
 
 router.get('/', (req, res) => {
-    Users
-    .get()
-    .then( user => {
-      res.status(200).json(user);
+    usersDB.get()
+    .then(result => {
+        res.status(200).json(result)})
+    .catch(error => {
+        res.status(500).json({ error: "The users information could not be retrieved." })
     })
-    .catch( err => {
-      return sendError( 'User information Unavailable at this moment', res );
-    })
-  })
-  
+});
 
-  router.get('/:id', (req, res) => {
+router.get('/:id', (req, res) => {
+    const {id} = req.params
+
+    usersDB.getById(id)
+    .then(result => {
+        res.status(200).json(result)})
+    .catch(error => {
+        res.status(500).json({ error: "The users information could not be retrieved." })
+    })
+
+});
+
+router.get('/:id/posts',validateUserId, (req, res) => {
 
     const id = req.params.id
-    Users
-    .getById(id)
-    .then( user => {
-      if (user === undefined) {
-        return sendMissing(res);
-      }
-      else{
-        return res.status(200).json(user);
-      }
+        usersDB.getUserPosts(id)
+        .then(post => {
+                res.status(201).json(post)
     })
-    .catch( err => {
-      return sendError( 'User information Unavailable at this moment', res );
-    })
-  })
+    .catch(errer => 
+        res.status(500).json({ error: "The posts information could not be retrieved." }))
 
-  router.get('/:id/posts', (req, res) => {
+});
+
+router.delete('/:id',validateUserId, (req, res) => {
+    const id = req.params.id
+        
+    usersDB.remove(id)
+    .then(result => {
+            res.status(200).json({message: 'user deleted succesfully'})
+})
+.catch(error => {
+    res.status(500).json({ error: "The user could not be removed" })
+})
+
+});
+
+router.put('/:id',validateUserId, (req, res) => {
+    const id = req.params.id
+    const changes = req.body;
+
+    usersDB.update(id, changes)
+    .then(updated => {
+            res.status(200).json(updated)
+    })
+    .catch(error => {
+        res.status(500).json({ error: "The user information could not be modified." })
+})
     
-    const id = req.params.id
-    Users
-    .getUserPosts(id)
-    .then( user => {
-      if (user.length == 0) {
-        return sendMissing(res);
-      }
-      else{
-        return res.status(200).json(user);
-      }
-    })
-    .catch( err => {
-      return sendError( 'User information Unavailable at this moment', res );
-    })
-  })
-
-  router.delete('/:id', (req, res) => {
-    //set id
-    const id = req.params.id
-    //grab user information 
-    Users.getById(id)
-    .then( user => { 
-      if (user === undefined) {
-        return sendMissing(res);
-      }
-      else{
-        return res.status(200).json(user);
-      }
-    })
-    .catch( err => {
-      return sendError( 'This function is currently unavailable', res );
-    })
-    //delete the user
-    Users
-    .remove(id)
-    .then( user => { 
-      if (user === undefined) {
-        return sendMissing(res);
-      }
-      else{
-        return res.status(200).json(user);
-      }
-    })
-    .catch( err => {
-      return sendError( 'This function is currently unavailable', res );
-    })
-  })
-
-  router.put('/:id', upperCase, (req, res) => {
-    //define id 
-    const id = req.params.id
-  
-    //define req.body
-    const { name } = req.body;
-    const user = { name };
-  
-    //check the req body
-    if(!name) { 
-      return res.status(400).json({ error: 'Please provide the NEW user name' });
-    }
-    Users
-    .update(id, user)
-    .then( person => {
-      if (person === undefined) {
-        return sendMissing(res);
-      }
-      else{
-        newUser = { ID, name }
-        return res.status(201).json(newUser);
-      }
-    })
-    .catch( err => {
-      return sendError( 'This function is currently unavailable', res );
-    })
-  })
+});
 
 //custom middleware
 
 function validateUserId(req, res, next) {
     const {id} = req.params
 
-    Users.getById(id)
+    usersDB.getById(id)
     .then(userid => {
         if(userid){
             req.user = req.body
@@ -142,6 +113,26 @@ function validateUserId(req, res, next) {
 
 };
 
+function validateUser(req, res, next) {
+    let body = req.body
+    console.log(body)
+    if(!body){
+        res.status(400).json({ message: "missing user data" })
+    }else if(!body.name){
+        res.status(400).json({ message: "missing required name field" })
+    }
+    next();
 
+};
+
+function validatePost(req, res, next) {
+  if(!req.body){
+      res.status(400). json({message: "missing post data"})
+  }else if(!req.body.text){
+      res.status(400).json({message: "missing required text feild"})
+  }
+  next();
+
+};
 
 module.exports = router;
